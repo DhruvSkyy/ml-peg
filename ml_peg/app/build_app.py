@@ -15,7 +15,7 @@ from dash import (
     no_update,
 )
 from dash.dash_table import DataTable
-from dash.dcc import Dropdown, Interval, Link, Loading, Location, Store
+from dash.dcc import Interval, Link, Loading, Location, Store
 from dash.exceptions import PreventUpdate
 from dash.html import H1, H3, A, Br, Details, Div, Img, Span, Summary
 from yaml import safe_load
@@ -49,11 +49,13 @@ from ml_peg.app.utils.register_callbacks import (
     register_filter_loading_callback,
     register_filter_tables_callback,
 )
+from ml_peg.app.utils.settings import register_settings_callbacks
 from ml_peg.app.utils.storage import (
     build_header_controls,
     register_storage_callbacks,
 )
 from ml_peg.app.utils.utils import (
+    DEFAULT_COLORMAP,
     framework_sort_key,
     get_framework_config,
 )
@@ -628,33 +630,8 @@ def build_nav(
         "color": "#6c757d",
         "padding": "5px",
     }
-    cmap_selector = Details(
-        [
-            Summary("Colour scheme", style=_summary_label_style),
-            Div(
-                Dropdown(
-                    id="cmap-dropdown",
-                    options=[
-                        {"label": "Viridis (colourblind safe)", "value": "viridis_r"},
-                        {"label": "Blue-Red (colourblind safe)", "value": "coolwarm"},
-                        {
-                            "label": "Green-Red",
-                            "value": "RdYlGn_r",
-                        },
-                    ],
-                    value="viridis_r",
-                    clearable=False,
-                    persistence=True,
-                    persistence_type="local",
-                    persisted_props=["value"],
-                    style={"fontSize": "13px"},
-                ),
-                style={"padding": "8px 12px"},
-            ),
-        ],
-        style={"marginBottom": "8px", "fontSize": "13px"},
-    )
-
+    # The colour-scheme dropdown now lives in the header settings panel (see
+    # ml_peg.app.utils.settings); its sync_cmap callback below is unchanged.
     weight_preset_selector = build_weight_preset_selector(_summary_label_style)
 
     sidebar = Div(
@@ -723,7 +700,14 @@ def build_nav(
             storage_type="session",
             data=_default_weight_store_data(summary_table),
         ),
-        Store(id="cmap-store", storage_type="local", data="viridis_r"),
+        Store(id="cmap-store", storage_type="local", data=DEFAULT_COLORMAP),
+        # Theme + table-zoom preferences (persisted locally; the no-flash script
+        # in run_app.py reads them before first paint). bench-expand-store backs
+        # the settings "expand all benchmarks" preference.
+        Store(id="theme-store", storage_type="local"),
+        Store(id="zoom-store", storage_type="local"),
+        Store(id="font-store", storage_type="local"),
+        Store(id="bench-expand-store", storage_type="local"),
         *category_state_stores,
         *framework_state_stores,
         *test_state_stores,
@@ -862,7 +846,6 @@ def build_nav(
                         Div(
                             [
                                 get_model_filter(MODELS),
-                                cmap_selector,
                                 weight_preset_selector,
                                 get_element_filter(),
                                 Store(
@@ -948,6 +931,7 @@ def build_nav(
     )
 
     register_storage_callbacks()
+    register_settings_callbacks()
 
     @callback(
         Output("model-filter-checklist", "value"),

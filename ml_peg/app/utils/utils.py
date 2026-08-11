@@ -18,6 +18,11 @@ import yaml
 from ml_peg.models import MODELS_ROOT
 from ml_peg.models.get_models import get_model_names
 
+# Single source of truth for the default table colour scheme. Referenced by the
+# colour-scheme dropdown, its backing store, and every ``cmap_name or ...``
+# fallback so the shown scheme and the cell colouring can never disagree.
+DEFAULT_COLORMAP = "viridis_r"
+
 
 class ThresholdEntry(TypedDict):
     """Structure describing the normalization thresholds for a metric."""
