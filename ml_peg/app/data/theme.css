@@ -444,14 +444,20 @@ a:hover {
   text-align: left;
   font-family: var(--font-sans);
   color: var(--mlpeg-ink);
+  /* Native <summary>: drop the default disclosure triangle (we draw our own
+     chevron) and keep the flex layout. */
+  list-style: none;
   /* Round the top corners here now that the card itself no longer clips. */
   border-top-left-radius: var(--radius-lg);
   border-top-right-radius: var(--radius-lg);
 }
+.mlpeg-bench-header::-webkit-details-marker {
+  display: none;
+}
 .mlpeg-bench-header:hover {
   background: var(--mlpeg-surface-2);
 }
-.mlpeg-bench-header--open {
+.mlpeg-bench-card[open] > .mlpeg-bench-header {
   border-bottom: 1px solid var(--mlpeg-border);
 }
 .mlpeg-bench-title {
@@ -478,7 +484,7 @@ a:hover {
 .mlpeg-bench-header:hover .mlpeg-bench-chevron {
   background: var(--mlpeg-surface-3);
 }
-.mlpeg-bench-header--open .mlpeg-bench-chevron {
+.mlpeg-bench-card[open] .mlpeg-bench-chevron {
   transform: rotate(90deg);
   background: var(--mlpeg-accent-soft);
   color: var(--mlpeg-accent-strong);

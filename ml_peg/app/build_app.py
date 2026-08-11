@@ -27,6 +27,8 @@ from ml_peg.app.filters import (
     register_element_filter_callbacks,
 )
 from ml_peg.app.utils.build_components import (
+    CARDS_OPEN,
+    build_benchmark_card,
     build_download_controls,
     build_faqs,
     build_footer,
@@ -34,6 +36,7 @@ from ml_peg.app.utils.build_components import (
     build_page_loading_spinner,
     build_summary_table,
     build_weight_components,
+    table_wrapper_style,
 )
 from ml_peg.app.utils.build_frameworks import (
     build_framework_page_layout,
@@ -538,9 +541,16 @@ def build_category_page_layout(
     summary_table = category_view["summary_table"]
     weight_components = category_view["weight_components"]
     tests = category_view["tests"]
+    # Each benchmark is a native collapsible card; the first CARDS_OPEN start open
+    # so some data shows at a glance (review feedback), the rest collapse.
     benchmark_section = Div(
-        [test["layout"] for test in tests],
-        style={"display": "grid", "gap": "24px"},
+        [
+            build_benchmark_card(
+                test["name"], test["layout"], open_default=index < CARDS_OPEN
+            )
+            for index, test in enumerate(tests)
+        ],
+        className="mlpeg-benchmark-grid",
     )
 
     return Div(
@@ -548,13 +558,19 @@ def build_category_page_layout(
             H1(category_title),
             H3(category_description),
             Div(
-                [
-                    build_download_controls(summary_table.id, row=True),
-                    build_loading_summary_table(summary_table),
-                    Br(),
-                    weight_components,
-                ],
-                style={"width": "fit-content"},
+                Div(
+                    Div(
+                        [
+                            build_download_controls(summary_table.id, row=True),
+                            build_loading_summary_table(summary_table),
+                            Br(),
+                            weight_components,
+                        ],
+                        style=table_wrapper_style(summary_table),
+                    ),
+                    className="mlpeg-table-scroll",
+                ),
+                className="mlpeg-summary-card",
             ),
             Div(
                 [
@@ -562,7 +578,7 @@ def build_category_page_layout(
                         style={
                             "width": "100%",
                             "height": "1px",
-                            "backgroundColor": "#a7adb3",
+                            "backgroundColor": "var(--mlpeg-divider)",
                         }
                     ),
                 ],
