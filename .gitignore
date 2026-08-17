@@ -41,4 +41,14 @@ __pycache__/
 ml_peg/app/data/*
 !ml_peg/app/data/onboarding/
 !ml_peg/app/data/table_download/
+!ml_peg/app/data/theme.css
+!ml_peg/app/data/theme_plots.js
+!ml_peg/app/data/settings_popover.js
+!ml_peg/app/data/tooltip_portal.js
+!ml_peg/app/data/fonts/
+# The UI icons are referenced by theme.css (gear/sun/moon).
+!ml_peg/app/data/icons/
 certs/
+# Local app data downloaded by `ml_peg download` before running tests/app.
+data.tar.gz
+scratchpad/
