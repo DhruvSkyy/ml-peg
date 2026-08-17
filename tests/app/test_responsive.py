@@ -45,6 +45,13 @@ def _load(page: Page, app_url: str, size: tuple[int, int]) -> None:
     page.wait_for_selector("#startup-mask", state="hidden", timeout=TIMEOUT)
 
 
+def _page_overflow(page: Page) -> float:
+    """Horizontal overflow of the page in px (>0 means the page itself scrolls)."""
+    return page.evaluate(
+        "() => document.documentElement.scrollWidth - window.innerWidth"
+    )
+
+
 def _open_category(page: Page) -> None:
     """Navigate to the test category page (opening the hamburger first on mobile)."""
     if page.viewport_size["width"] <= MOBILE_MAX:
@@ -63,10 +70,10 @@ def test_responsive_layout(page: Page, app_url: str, size_name: str) -> None:
     _load(page, app_url, size)
     width = size[0]
 
-    # 1) The home page renders. (The page-level "no horizontal overflow" invariant
-    #    relies on the `.mlpeg-table-scroll` card that contains wide tables, which
-    #    ships with the cards slice — asserted there across all viewports.)
+    # 1) The home page (with its summary table) must not overflow the viewport.
     expect(page.locator("#summary-table")).to_be_visible(timeout=TIMEOUT)
+    home_ovf = _page_overflow(page)
+    assert home_ovf <= 2, f"{size_name}: home page overflows by {home_ovf}px"
 
     # 2) Navigation adapts to the breakpoint.
     if width <= MOBILE_MAX:
@@ -120,9 +127,52 @@ def test_responsive_layout(page: Page, app_url: str, size_name: str) -> None:
             f"{size_name}: sidebar should be on-screen on desktop widths"
         )
 
-    # NOTE: the benchmark-page overflow + sticky-MLIP-column-in-scroll-container
-    # checks live with the cards slice (they rely on the `.mlpeg-table-scroll`
-    # wrapper that ships with the collapsible-card layout, not present here).
+    # 3) A benchmark table page must also not overflow the page.
+    _open_category(page)
+    bench_ovf = _page_overflow(page)
+    assert bench_ovf <= 2, f"{size_name}: benchmark page overflows by {bench_ovf}px"
+
+    # 4) Model-name column: when the table is wider than its card (always true at
+    #    phone widths for the IONPI19 table), scroll it right. On desktop the MLIP
+    #    column must stay pinned to the container's left with an opaque background;
+    #    on phones (<=768px) it is deliberately un-pinned, so it scrolls off left.
+    res = page.evaluate(
+        """() => {
+            const table = document.querySelector('#IONPI19-table');
+            const scroll = table && table.closest('.mlpeg-table-scroll');
+            if (!scroll) return { err: 'no scroll container' };
+            if (scroll.scrollWidth <= scroll.clientWidth + 4) {
+                return { overflow: false };
+            }
+            scroll.scrollLeft = scroll.scrollWidth;
+            const mlip = scroll.querySelector('td[data-dash-column="MLIP"]');
+            if (!mlip) return { err: 'no MLIP cell' };
+            const s = scroll.getBoundingClientRect();
+            const m = mlip.getBoundingClientRect();
+            return {
+                overflow: true,
+                scrollLeft: scroll.scrollLeft,
+                delta: m.left - s.left,
+                bg: getComputedStyle(mlip).backgroundColor,
+            };
+        }"""
+    )
+    assert "err" not in res, f"{size_name}: {res.get('err')}"
+    if res.get("overflow"):
+        assert res["scrollLeft"] > 0, f"{size_name}: table did not scroll"
+        if width <= MOBILE_MAX:
+            # Un-pinned on phones: the leftmost cell scrolls off to the left.
+            assert res["delta"] < -2, (
+                f"{size_name}: MLIP column should scroll (not pin) on mobile "
+                f"(delta={res['delta']}px)"
+            )
+        else:
+            assert abs(res["delta"]) <= 2, (
+                f"{size_name}: MLIP column not pinned to left (delta={res['delta']}px)"
+            )
+            assert res["bg"] not in ("rgba(0, 0, 0, 0)", "transparent"), (
+                f"{size_name}: sticky MLIP background is transparent ({res['bg']})"
+            )
 
 
 def test_mobile_controls_open(page: Page, app_url: str) -> None:
