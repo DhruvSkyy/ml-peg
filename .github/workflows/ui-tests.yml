@@ -2,7 +2,7 @@ name: ui-tests
 
 # Browser-driven tests for the Dash app (tests/app). These boot the real app on
 # an ephemeral port and drive it with Playwright, so they need a headless
-# Chromium. The benchmark data is a committed fixture (tests/data/app, ~2.4 MB)
+# Chromium. The benchmark data is a committed fixture (tests/data/app, ~2.9 MB)
 # that conftest puts in place, so there is nothing to download.
 
 # Chromium plus a full app build is still slower than the unit suite, so only run

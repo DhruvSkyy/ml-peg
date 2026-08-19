@@ -22,10 +22,10 @@ from ml_peg.app import APP_ROOT
 # Quieten the per-request werkzeug access log so test output stays readable.
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
-# Committed stand-in for the published data tarball (~2.4 MB against ~2 GB
-# compressed / ~11 GB unpacked). The suite never read more than a handful of
-# benchmarks, and downloading meant testing whatever was last published rather
-# than a fixed input.
+# Committed stand-in for the published data tarball (~2.9 MB against ~9 GB
+# compressed). The suite never read more than a handful of benchmarks, and
+# downloading meant testing whatever was last published rather than a fixed
+# input.
 FIXTURE_DATA = Path(__file__).parents[1] / "data" / "app"
 
 # Dropped into each directory this fixture copies, so a run interrupted before
@@ -42,13 +42,28 @@ FIXTURE_MARKER = ".ml-peg-test-fixture"
 #                    per-cell plot dispatch rather than IONPI19's per-column one.
 #   iron_properties  twelve metric columns and dropdown-driven figures, i.e. the
 #                    widest weight/threshold grid and a custom callback shape.
-# Together they span three categories, which is what puts more than one slice in
-# the overall summary table and the Explorer.
+#   ACONFL           the Explorer's model finder drops any model with fewer than
+#   UpU46            _MIN_FINDER_BENCH (3) admissible benchmarks, and physicality
+#                    is scored separately rather than counting towards that, so
+#                    IONPI19 and iron_properties alone leave every model one
+#                    short and the finder ranks nothing at all. These two carry
+#                    the count to three, and all three are categories the
+#                    finder's "molecular" preset selects, so that preset ranks
+#                    too. Both are conformers, the cheapest benchmarks that do
+#                    this: one model's geometries each, which the element
+#                    resolver needs (it reads the shipped .xyz files, not
+#                    info.json).
+# Together they span four categories, which is what puts more than one slice in
+# the overall summary table and the Explorer. Nothing is added to
+# non_covalent_interactions on purpose: only the first benchmark card on a
+# category page opens by default, and the interaction tests drive IONPI19.
 FIXTURE_BENCHMARKS = (
     ("non_covalent_interactions", "IONPI19"),
     ("physicality", "extensivity"),
     ("physicality", "oxidation_states"),
     ("bulk_crystal", "iron_properties"),
+    ("conformers", "ACONFL"),
+    ("conformers", "UpU46"),
 )
 
 # The benchmark the interaction tests drive by id.
