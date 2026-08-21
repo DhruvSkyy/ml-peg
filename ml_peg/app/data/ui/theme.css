@@ -703,6 +703,169 @@ a:hover {
   margin-top: var(--sp-2);
 }
 
+/* ---- Explorer page: panels + control labels ---------------------------
+   These classes are used by build_explorer.py; give them the same card look as
+   the rest of the app so the Explorer isn't a bare, unstyled page. */
+.mlpeg-explorer-panel {
+  min-width: 0;
+  background: var(--mlpeg-surface);
+  border: 1px solid var(--mlpeg-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--sp-6);
+  margin-bottom: var(--sp-6);
+}
+/* ---- Model report card ------------------------------------------------- */
+/* Extrapolation summary: a row of headline chips (in-domain vs extrapolated
+   accuracy, physicality) that answers "where does this model work?" at a glance. */
+.mlpeg-report-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-5);
+}
+.mlpeg-report-chip {
+  border: 1px solid var(--mlpeg-border);
+  border-radius: var(--radius-sm);
+  background: var(--mlpeg-surface-2);
+  padding: var(--sp-3) var(--sp-4);
+}
+.mlpeg-report-chip-label {
+  font-size: var(--fs-xs, 11px);
+  font-weight: 600;
+  color: var(--mlpeg-ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.mlpeg-report-chip-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.mlpeg-report-chip-value--lot {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mlpeg-ink);
+}
+.mlpeg-report-chip-sub {
+  font-size: var(--fs-xs, 11px);
+  color: var(--mlpeg-ink-3);
+}
+/* The per-benchmark table sits beside the profile chart; cap its height and let it
+   scroll (both axes) so a long benchmark list or wide rows never stretch the card. */
+.mlpeg-report-table-wrap {
+  max-height: 560px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.mlpeg-control-label {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--mlpeg-ink-2);
+  margin-bottom: 4px;
+}
+/* Structure-detail + head-to-head per-category tables (register_explorer_callbacks.py).
+   These render as raw html.Table; give them the card's typography and quiet row
+   rules so they read as part of the panel instead of a bare browser table. */
+.mlpeg-explorer-struct-table {
+  /* display:block + overflow-x lets a wide table scroll inside its panel instead
+     of pushing the whole page wide on narrow screens (keeps 0 horizontal overflow). */
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.mlpeg-explorer-struct-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--mlpeg-ink-2);
+  border-bottom: 1px solid var(--mlpeg-border-strong);
+  padding: 6px 10px;
+}
+.mlpeg-explorer-struct-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--mlpeg-border);
+  color: var(--mlpeg-ink);
+}
+.mlpeg-explorer-struct-table td:not(:first-child),
+.mlpeg-explorer-struct-table th:not(:first-child) {
+  text-align: right;
+}
+.mlpeg-explorer-struct-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.mlpeg-explorer-struct-table tbody tr:hover td {
+  background: var(--mlpeg-surface-2);
+}
+/* A panel's row of labelled controls (finder / head-to-head / structure-fails).
+   One wrapping flex row on desktop; the max-width query below stacks it full
+   width on phones so 260px dropdowns never overflow. */
+.mlpeg-explorer-controls {
+  display: flex;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: var(--sp-3);
+}
+/* Section jump nav: sticks to the top of the scroll area so the 7-panel page is
+   navigable from anywhere; a translucent surface keeps it legible over content. */
+.mlpeg-explorer-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: var(--sp-2) 0;
+  margin: var(--sp-3) 0 var(--sp-2);
+  background: color-mix(in srgb, var(--mlpeg-surface-2) 88%, transparent);
+  backdrop-filter: blur(4px);
+}
+.mlpeg-explorer-jump {
+  font-size: var(--fs-sm, 13px);
+  color: var(--mlpeg-accent);
+  text-decoration: none;
+  padding: 3px 10px;
+  border: 1px solid var(--mlpeg-border-strong);
+  border-radius: 999px;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.mlpeg-explorer-jump:hover {
+  background: var(--mlpeg-accent-soft);
+  color: var(--mlpeg-accent-strong);
+}
+.mlpeg-explorer-jump:focus-visible {
+  outline: 2px solid var(--mlpeg-accent);
+  outline-offset: 2px;
+}
+/* A short accent rule on each panel heading so the sections are scannable. */
+.mlpeg-explorer-header {
+  border-left: 3px solid var(--mlpeg-accent);
+  padding-left: var(--sp-3);
+}
+/* Per-panel "how this works" disclosure: the long methodology prose lives here,
+   below the controls, so the panel leads with its chart rather than a wall of text. */
+.mlpeg-explorer-help {
+  margin: var(--sp-2) 0 var(--sp-3);
+}
+.mlpeg-explorer-help > summary {
+  font-size: var(--fs-xs, 12px);
+  color: var(--mlpeg-ink-3);
+  cursor: pointer;
+}
+.mlpeg-explorer-help > p {
+  font-size: var(--fs-sm, 13px);
+  color: var(--mlpeg-ink-2);
+  max-width: 76ch;
+  margin: var(--sp-2) 0 0;
+}
+
 /* ---- Scoring grids: column separators + ghost reset ------------------- */
 /* The Good/Bad/Weight grids butt columns together with a 0 gap; a right border
    on each cell gives the "lines" that make the grid readable and line the
@@ -1238,6 +1401,23 @@ input[type="number"] {
     left: auto;
     z-index: auto;
     box-shadow: none;
+  }
+  /* ---- Explorer: tighten the long 7-panel page for phones ------------- */
+  .mlpeg-explorer-panel {
+    padding: var(--sp-4);
+  }
+  .mlpeg-explorer-panel h3 {
+    font-size: var(--fs-md, 16px);
+  }
+  /* Stack the labelled controls full-width instead of cramming a flex row. */
+  .mlpeg-explorer-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-3);
+  }
+  /* A stacked control fills the column; its inner dropdown follows suit. */
+  .mlpeg-explorer-controls > div {
+    width: 100%;
   }
 }
 

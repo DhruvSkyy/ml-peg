@@ -40,11 +40,13 @@ from ml_peg.app.utils.build_components import (
     build_weight_components,
     table_wrapper_style,
 )
+from ml_peg.app.utils.build_explorer import EXPLORER_PATH, build_explorer_layout
 from ml_peg.app.utils.build_frameworks import (
     build_framework_page_layout,
     build_framework_summary_tables,
     build_framework_views,
 )
+from ml_peg.app.utils.explorer_data import warm_explorer_data
 from ml_peg.app.utils.onboarding import (
     build_onboarding_modal,
     register_onboarding_callbacks,
@@ -54,6 +56,7 @@ from ml_peg.app.utils.register_callbacks import (
     register_filter_loading_callback,
     register_filter_tables_callback,
 )
+from ml_peg.app.utils.register_explorer_callbacks import register_explorer_callbacks
 from ml_peg.app.utils.settings import register_settings_callbacks
 from ml_peg.app.utils.shell import STARTUP_MASK_POLL_MS, register_shell_callbacks
 from ml_peg.app.utils.storage import (
@@ -276,6 +279,12 @@ def build_sidebar(
                             "Summary",
                             href="/",
                             style=_nav_link_style(summary_active),
+                            className="sidebar-link",
+                        ),
+                        Link(
+                            "Explorer",
+                            href=EXPLORER_PATH,
+                            style=_nav_link_style(current_path == EXPLORER_PATH),
                             className="sidebar-link",
                         ),
                     ]
@@ -1238,6 +1247,9 @@ def build_nav(
                 ]
             ), sidebar_children
 
+        if pathname == EXPLORER_PATH:
+            return Div([build_explorer_layout()]), sidebar_children
+
         selected_framework = path_to_framework.get(pathname)
         if selected_framework is not None:
             key = ("framework", selected_framework, expand_all)
@@ -1340,3 +1352,7 @@ def build_full_app(full_app: Dash, category: str = "*", test: str = "*") -> None
         framework_weight_components,
     )
     register_onboarding_callbacks()
+    register_explorer_callbacks()
+    # Warm the Explorer's data cache now (before serving) so navigating there is
+    # instant, never a frozen synchronous compute in the routing callback.
+    warm_explorer_data()

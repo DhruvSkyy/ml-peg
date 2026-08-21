@@ -583,6 +583,40 @@ def _categorize_benchmark_level(level: str | None) -> str | None:
     return DEFAULT_WARNING_CATEGORY
 
 
+def classify_level_of_theory(
+    model_level: str | None, reference_level: str | None
+) -> str:
+    """
+    Classify a (model training level, benchmark reference level) pair.
+
+    Shares the table's warning scheme so the Explorer's report card and the benchmark
+    tables agree: a match is an in-domain test, a mismatch is an extrapolation whose
+    kind is named by the reference level.
+
+    Parameters
+    ----------
+    model_level
+        The model's training level of theory (e.g. ``"PBE"``).
+    reference_level
+        The benchmark metric's reference level of theory (e.g. ``"DLPNO-CCSD(T)/CBS"``).
+
+    Returns
+    -------
+    str
+        ``"in_domain"`` when the levels match (or no reference is recorded); else the
+        reference's mismatch category -- ``"dft"`` (XC-functional mismatch, red),
+        ``"high_level"`` (DFT vs post-HF/QMC, yellow), or ``"experimental"`` (green).
+    """
+    if not reference_level:
+        return "in_domain"
+    if (
+        model_level is not None
+        and str(model_level).strip().lower() == str(reference_level).strip().lower()
+    ):
+        return "in_domain"
+    return _categorize_benchmark_level(reference_level)
+
+
 def build_level_of_theory_warnings(
     rows: list[dict[str, Any]] | None,
     model_theory_levels: dict[str, str | None] | None,
