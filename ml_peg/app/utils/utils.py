@@ -18,6 +18,12 @@ import yaml
 from ml_peg.models import MODELS_ROOT
 from ml_peg.models.get_models import get_model_names
 
+RESERVED_TABLE_COLUMNS = ("MLIP", "Score", "id", "link")
+# Single source of truth for the default table colour scheme. Referenced by the
+# colour-scheme dropdown, its backing store, and every ``cmap_name or ...``
+# fallback so the shown scheme and the cell colouring can never disagree.
+DEFAULT_COLORMAP = "viridis_r"
+
 
 class ThresholdEntry(TypedDict):
     """Structure describing the normalization thresholds for a metric."""
@@ -142,15 +148,17 @@ def build_threshold_input_style(border_colour: str) -> dict[str, str]:
     dict[str, str]
         Inline Dash style dictionary.
     """
+    # The good/bad colour is dynamic (follows the colormap), so pass it to the
+    # inner <input>'s border via an inherited CSS variable rather than drawing a
+    # second box on the .dash-input-container wrapper (see theme.css).
     return {
         "width": "60px",
         "fontSize": "12px",
         "padding": "2px 4px",
-        "border": f"2px solid {border_colour}",
-        "borderRadius": "3px",
         "boxSizing": "border-box",
         "margin": "0 auto",
         "display": "block",
+        "--mlpeg-input-border": border_colour,
     }
 
 
@@ -163,12 +171,13 @@ def weight_input_style() -> dict[str, str]:
     dict[str, str]
         Inline Dash style dictionary.
     """
+    # No border/radius here: dcc.Input wraps the <input> in a
+    # .dash-input-container, and the inner <input> already draws the box (see
+    # theme.css). Styling this wrapper too gave a redundant box-in-a-box.
     return {
         "width": "60px",
         "fontSize": "12px",
         "padding": "2px 4px",
-        "border": "1px solid #6c757d",
-        "borderRadius": "3px",
         "textAlign": "center",
     }
 
@@ -466,6 +475,52 @@ def filter_rows_by_models(
         for row in rows
         if (row.get("MLIP") in selected) or (row.get("id") in selected)
     ]
+
+
+def row_has_no_results(row: dict[str, str | float | None]) -> bool:
+    """
+    Check whether a table row has no result in any metric column.
+
+    Parameters
+    ----------
+    row
+        Table row to check.
+
+    Returns
+    -------
+    bool
+        `True` if no metric column holds a value, otherwise `False`.
+    """
+    for key, value in row.items():
+        if key in RESERVED_TABLE_COLUMNS:
+            continue
+        if value is None or value == "NaN" or value == "":
+            continue
+        if isinstance(value, float) and np.isnan(value):
+            continue
+        return False
+    return True
+
+
+def drop_empty_model_rows(
+    rows: list[dict[str, str | float | None]] | None,
+) -> list[dict[str, str | float | None]]:
+    """
+    Drop model rows if no metric column has a value.
+
+    Parameters
+    ----------
+    rows
+        Table rows to be filtered.
+
+    Returns
+    -------
+    list[dict[str, str | float | None]]
+        Filtered rows that have at least one metric result.
+    """
+    if not rows:
+        return []
+    return [row for row in rows if not row_has_no_results(row)]
 
 
 def get_scores(
@@ -960,7 +1015,6 @@ def format_metric_columns(
         return None
 
     thresholds = thresholds or {}
-    reserved = {"MLIP", "Score", "id", "link"}
     updated_columns: list[dict[str, object]] = []
 
     for column in columns:
@@ -969,7 +1023,7 @@ def format_metric_columns(
 
         if (
             not isinstance(column_id, str)
-            or column_id in reserved
+            or column_id in RESERVED_TABLE_COLUMNS
             or column_id not in thresholds
         ):
             updated_columns.append(column_copy)
@@ -1042,11 +1096,10 @@ def format_tooltip_headers(
         return None
 
     thresholds = thresholds or {}
-    reserved = {"MLIP", "Score", "id", "link"}
 
     updated: dict[str, Any] = {}
     for key, entry in tooltip_header.items():
-        if key in reserved:
+        if key in RESERVED_TABLE_COLUMNS:
             updated[key] = entry
             continue
 
