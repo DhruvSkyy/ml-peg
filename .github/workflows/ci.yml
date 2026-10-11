@@ -22,6 +22,14 @@ jobs:
       - name: Install dependencies and example extra
         run: uv sync --extra mace
 
+      - name: Cache test fixture
+        # tests/explorer runs against the same ~800 KB fixture as the browser
+        # suite; conftest still verifies the cached archive's digest before use.
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ml_peg/ui-fixture-v1.zip
+          key: ui-fixture-v1-b0fab469
+
       - name: Run test suite
         env:
           # show timings of tests
