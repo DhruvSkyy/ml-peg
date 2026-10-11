@@ -3,61 +3,28 @@
 A small subset of the app is built once per test session and served on an
 ephemeral port via a background Werkzeug thread. This exercises the real Dash app
 (layout + callbacks) while avoiding the full ~13s cold start of every benchmark.
+The benchmark data is the published test fixture (see ``tests/conftest.py``).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-import hashlib
+from collections.abc import Callable, Iterator
 from importlib import import_module
 import logging
 from pathlib import Path
 import shutil
 import threading
 import warnings
-import zipfile
 
-from botocore.exceptions import BotoCoreError, ClientError
+from playwright.sync_api import Locator
 import pytest
 from werkzeug.serving import make_server
 
+from ml_peg.analysis.explorer import build_explorer_data
 from ml_peg.app import APP_ROOT
-from ml_peg.calcs.utils.utils import BENCHMARK_DATA_DIR
-from ml_peg.data.data import download
 
 # Quieten the per-request werkzeug access log so test output stays readable.
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
-
-# Stand-in for the published data tarball (~800 KB against ~9 GB): a handful of
-# benchmarks, published once to the ml-peg-data bucket and never overwritten. A
-# changed fixture is a new -v2 object plus a bump here. The bucket has no
-# versioning, so the digest is what actually enforces that: a swapped object
-# fails loudly instead of quietly changing what the suite tests. (The object as
-# uploaded also carries macOS "__MACOSX/" resource-fork entries, which
-# extraction skips.)
-FIXTURE_VERSION = "v1"
-FIXTURE_KEY = f"tests/ui-fixture-{FIXTURE_VERSION}.zip"
-FIXTURE_SHA256 = "b0fab46961813f329702b6d464171efc02edf73503c7c4c5069db7f91935564f"
-FIXTURE_ARCHIVE = BENCHMARK_DATA_DIR / f"ui-fixture-{FIXTURE_VERSION}.zip"
-
-# Benchmarks the fixture supplies, chosen for coverage per KB rather than size:
-#   IONPI19          one metric, a parity plot and a structure viewer; the
-#                    benchmark every interaction test targets by id.
-#   extensivity      physicality category (weight 1, so the overall score is a
-#                    real weighted mean) and the only mace-multihead benchmark
-#                    here, so /framework/mace-multihead exists.
-#   oxidation_states three metrics with experimental levels of theory, and the
-#                    per-cell plot dispatch rather than IONPI19's per-column one.
-#   iron_properties  twelve metric columns and dropdown-driven figures, i.e. the
-#                    widest weight/threshold grid and a custom callback shape.
-# Together they span three categories, which is what puts more than one slice in
-# the overall summary table and the Explorer.
-FIXTURE_BENCHMARKS = (
-    ("non_covalent_interactions", "IONPI19"),
-    ("physicality", "extensivity"),
-    ("physicality", "oxidation_states"),
-    ("bulk_crystal", "iron_properties"),
-)
 
 # The benchmark the interaction tests drive by id.
 TEST_CATEGORY = "non_covalent_interactions"
@@ -93,87 +60,25 @@ def wait_for_app_ready(page, timeout: int = READY_TIMEOUT) -> None:  # noqa: ANN
     )
 
 
-def _sha256(path: Path) -> str:
-    """
-    Return the SHA-256 hex digest of a file.
-
-    Parameters
-    ----------
-    path
-        File to hash.
-
-    Returns
-    -------
-    str
-        Hex digest.
-    """
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
 @pytest.fixture(scope="session")
-def fixture_data(tmp_path_factory) -> Path:
-    """
-    Fetch, verify and unpack the published test fixture, returning its root.
-
-    ``download_s3_data`` is deliberately not used: it extracts before returning,
-    so there is no point at which the archive can be checked before it is
-    trusted, and it unpacks every member rather than just the fixture directory.
-    The cached archive is re-hashed on every session, so a truncated or stale
-    copy fails the same way a swapped object does. Behaviour is identical locally
-    and in CI: no network means a failed session, not a silently skipped one.
-
-    Returns
-    -------
-    Path
-        Directory holding the fixture's ``<category>/<benchmark>`` tree.
-    """
-    if not FIXTURE_ARCHIVE.exists():
-        try:
-            download(key=FIXTURE_KEY, filename=str(FIXTURE_ARCHIVE))
-        except (BotoCoreError, ClientError) as err:
-            raise RuntimeError(
-                f"Could not fetch the test fixture {FIXTURE_KEY} from the "
-                "ml-peg-data bucket. Check the connection, or fetch it by hand: "
-                f"ml_peg download --key {FIXTURE_KEY} --filename {FIXTURE_ARCHIVE}"
-            ) from err
-
-    digest = _sha256(FIXTURE_ARCHIVE)
-    if digest != FIXTURE_SHA256:
-        FIXTURE_ARCHIVE.unlink()
-        raise RuntimeError(
-            f"Test fixture {FIXTURE_ARCHIVE} has SHA-256 {digest}, expected "
-            f"{FIXTURE_SHA256}. The archive has been deleted; rerun to fetch it "
-            "again. If the published object itself changed, it should have been "
-            "a new version rather than an overwrite."
-        )
-
-    extract_root = tmp_path_factory.mktemp("ui-fixture")
-    prefix = f"ui-fixture-{FIXTURE_VERSION}/"
-    try:
-        with zipfile.ZipFile(FIXTURE_ARCHIVE) as archive:
-            members = [name for name in archive.namelist() if name.startswith(prefix)]
-            archive.extractall(extract_root, members=members)
-    except zipfile.BadZipFile as err:
-        raise RuntimeError(f"Test fixture {FIXTURE_ARCHIVE} is not a zip file") from err
-    return extract_root / prefix
-
-
-@pytest.fixture(scope="session")
-def benchmark_data(fixture_data: Path, tmp_path_factory) -> Iterator[Path]:
+def benchmark_data(
+    fixture_data: Path,
+    fixture_benchmarks: tuple[tuple[str, str], ...],
+    tmp_path_factory,
+) -> Iterator[Path]:
     """
     Make the fixture benchmarks' data available under the app's assets folder.
 
-    Redirect benchmark module paths and Dash assets to an isolated temporary
-    tree. Local analysis outputs cannot change the dataset or be overwritten.
+    Redirect benchmark module paths, Dash assets and the Explorer's data root to
+    an isolated temporary tree. Local analysis outputs cannot change the dataset
+    or be overwritten.
 
     Parameters
     ----------
     fixture_data
         Root of the unpacked fixture.
+    fixture_benchmarks
+        The ``(category, benchmark)`` pairs the fixture supplies.
     tmp_path_factory
         Session temporary-directory factory.
 
@@ -185,7 +90,7 @@ def benchmark_data(fixture_data: Path, tmp_path_factory) -> Iterator[Path]:
     data_root = tmp_path_factory.mktemp("ui-assets")
     shutil.copytree(APP_ROOT / "data" / "ui", data_root / "ui")
     patches = pytest.MonkeyPatch()
-    for category, benchmark in FIXTURE_BENCHMARKS:
+    for category, benchmark in fixture_benchmarks:
         target = data_root / category / benchmark
         shutil.copytree(fixture_data / category / benchmark, target)
         module = import_module(f"ml_peg.app.{category}.{benchmark}.app_{benchmark}")
@@ -195,14 +100,30 @@ def benchmark_data(fixture_data: Path, tmp_path_factory) -> Iterator[Path]:
                 patches.setattr(
                     module, name, data_root / value.relative_to(APP_ROOT / "data")
                 )
+    # The Explorer reads every benchmark through this root (via its data_root()
+    # accessor) and caches what it finds per process, so clear the caches either
+    # side of the redirect: nothing should carry over from an earlier root, in or
+    # out.
+    patches.setattr(build_explorer_data, "DATA_ROOT", data_root)
+    loaders = (
+        build_explorer_data.data_file_index,
+        build_explorer_data._benchmark_geometry_index,
+        build_explorer_data._benchmark_element_index,
+    )
+    for loader in loaders:
+        loader.cache_clear()
     try:
         yield data_root
     finally:
         patches.undo()
+        for loader in loaders:
+            loader.cache_clear()
 
 
 @pytest.fixture(scope="session")
-def app_url(benchmark_data: Path) -> Iterator[str]:
+def app_url(
+    benchmark_data: Path, fixture_benchmarks: tuple[tuple[str, str], ...]
+) -> Iterator[str]:
     """
     Build the ML-PEG app for the fixture benchmarks and serve it for the session.
 
@@ -213,6 +134,8 @@ def app_url(benchmark_data: Path) -> Iterator[str]:
     ----------
     benchmark_data
         Ensures the benchmarks' data is in place before the app is built.
+    fixture_benchmarks
+        The ``(category, benchmark)`` pairs the fixture supplies.
 
     Yields
     ------
@@ -240,13 +163,13 @@ def app_url(benchmark_data: Path) -> Iterator[str]:
 
     def fixture_tests(**kwargs):
         result = ({}, {}, {}, {})
-        for category, benchmark in FIXTURE_BENCHMARKS:
+        for category, benchmark in fixture_benchmarks:
             selected = discover(category=category, test=benchmark)
             result[0].update(selected[0])
             for output, incoming in zip(result[1:], selected[1:], strict=True):
                 for key, value in incoming.items():
                     output.setdefault(key, {}).update(value)
-        assert set(result[0]) == {name for _, name in FIXTURE_BENCHMARKS}
+        assert set(result[0]) == {name for _, name in fixture_benchmarks}
         return result
 
     with pytest.MonkeyPatch.context() as patch:
@@ -255,7 +178,7 @@ def app_url(benchmark_data: Path) -> Iterator[str]:
             warnings.simplefilter("always")
             build_app.build_full_app(app, category="*", test="*")
 
-    expected = {benchmark for _, benchmark in FIXTURE_BENCHMARKS}
+    expected = {benchmark for _, benchmark in fixture_benchmarks}
     messages = [str(warning.message) for warning in caught]
     skipped = sorted(
         benchmark
@@ -263,8 +186,8 @@ def app_url(benchmark_data: Path) -> Iterator[str]:
         if any(f" {benchmark} in " in message for message in messages)
     )
     assert not skipped, (
-        f"fixture benchmarks failed to build: {skipped}. The fixture "
-        f"{FIXTURE_KEY} is incomplete for them."
+        f"fixture benchmarks failed to build: {skipped}. The published test "
+        "fixture is incomplete for them."
     )
 
     server = make_server("127.0.0.1", 0, app.server, threaded=True)
@@ -303,3 +226,45 @@ def ready_page(page, app_url):  # noqa: ANN001
     page.goto(app_url)
     wait_for_app_ready(page)
     return page
+
+
+def settle_locator(locator: Locator, timeout: int = READY_TIMEOUT) -> None:
+    """
+    Wait until a locator's bounding box stops moving.
+
+    Pages keep reflowing for a moment after load while their Plotly figures autosize
+    and re-theme; on a slow CI runner that shift can outlast Playwright's own
+    actionability wait, so hovers/clicks time out with "element is not stable". Poll
+    the box until it is unchanged across two ~120ms samples before interacting.
+
+    Parameters
+    ----------
+    locator
+        Element to wait on.
+    timeout
+        Maximum time to wait, in milliseconds.
+    """
+    page = locator.page
+    locator.wait_for(state="visible", timeout=timeout)
+    deadline = timeout
+    prev = locator.bounding_box()
+    while deadline > 0:
+        page.wait_for_timeout(120)
+        deadline -= 120
+        curr = locator.bounding_box()
+        if prev is not None and curr == prev:
+            return
+        prev = curr
+
+
+@pytest.fixture
+def settle() -> Callable[[Locator], None]:
+    """
+    Provide :func:`settle_locator` to tests.
+
+    Returns
+    -------
+    Callable[[Locator], None]
+        Waits until the given locator stops moving.
+    """
+    return settle_locator

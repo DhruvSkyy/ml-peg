@@ -95,13 +95,13 @@ Browser test fixture
 
 The browser-driven tests in ``tests/app`` do not use the full application data. They
 run against a small, fixed subset (a handful of benchmarks, ~800 KB) stored in the same
-bucket as ``tests/ui-fixture-v1.zip``, which ``tests/app/conftest.py`` downloads,
+bucket as ``tests/ui-fixture-v1.zip``, which ``tests/conftest.py`` downloads,
 verifies against a pinned SHA-256 digest, caches under ``~/.cache/ml_peg`` and copies
 into ``ml_peg/app/data`` for the duration of the session.
 
 This object is never overwritten. Replacing it would silently change what every open
 pull request is tested against, so a changed fixture is published as a new version and
-the constants in ``tests/app/conftest.py`` are bumped to match:
+the constants in ``tests/conftest.py`` are bumped to match:
 
 .. code-block:: bash
 
